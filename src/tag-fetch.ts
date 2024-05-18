@@ -12,13 +12,16 @@ const fetchTagsByAddressInRegistry = async (
     tokens: conf.XDAI_REGISTRY_TOKENS,
     domains: conf.XDAI_REGISTRY_DOMAINS,
   }[registryType]
+
   const subgraphQuery = {
     query: `
       {
         litems(where: {
           registry: "${registry}",
-          key0_starts_with_nocase: "${caipAddress}",
-          key0_ends_with_nocase: "${caipAddress}"
+          metadata_: {
+            key0_starts_with_nocase: "${caipAddress}",
+            key0_ends_with_nocase: "${caipAddress}"
+          }
         }) {
           status
           requests {
@@ -26,17 +29,27 @@ const fetchTagsByAddressInRegistry = async (
             resolutionTime
             requester
           }
+          metadata {
+            key0
+          }
         }
       }
     `,
   }
   const response = await fetch(subgraphEndpoint, {
     method: "POST",
+    headers: {
+      'Content-Type': 'application/json'
+    },
     body: JSON.stringify(subgraphQuery),
   })
 
-  const { data } = await response.json()
-  const items: Item[] = data.litems
+  const json = await response.json()
+  console.log("fetchTagsByAddressInRegistry response:", json) // Log the response
+  if (!json.data || !json.data.litems) {
+    throw new Error("Invalid response structure")
+  }
+  const items: Item[] = json.data.litems
 
   return items
 }
@@ -57,11 +70,17 @@ const fetchTagsBatchByRegistry = async (
           registryAddress: "${registry}",
           status_in: [Registered, ClearingRequested],
           latestRequestResolutionTime_gte: ${start},
-  	      latestRequestResolutionTime_lt: ${end}
+          latestRequestResolutionTime_lt: ${end}
         }, first: 1000) {
           id
-          props {
-            value
+          metadata {
+            props {
+              value
+            }
+            key0
+            key1
+            key2
+            key3
           }
           latestRequestResolutionTime
           requests {
@@ -69,23 +88,26 @@ const fetchTagsBatchByRegistry = async (
             requestType
             resolutionTime
           }
-          key0
-          key1
-          key2
-          key3
         }
       }
     `,
   }
   const response = await fetch(subgraphEndpoint, {
     method: "POST",
+    headers: {
+      'Content-Type': 'application/json'
+    },
     body: JSON.stringify(subgraphQuery),
   })
 
-  const { data } = await response.json()
-  const tags: Item[] = data.litems
+  const json = await response.json()
+  console.log("fetchTagsBatchByRegistry response:", json) // Log the response
+  if (!json.data || !json.data.litems) {
+    throw new Error("Invalid response structure")
+  }
+  const items: Item[] = json.data.litems
 
-  return tags
+  return items
 }
 
 const parseCaip = (caip: string): { address: string; chain: number } => {
@@ -98,7 +120,7 @@ const itemToTag = async (
   registryType: "addressTags" | "tokens" | "domains"
 ): Promise<Tag> => {
   // in all 3 registries, key0 is caip address
-  const { chain, address } = parseCaip(item.key0)
+  const { chain, address } = parseCaip(item.metadata.key0)
   const tag: Tag = {
     id: item.id,
     registry: registryType,
@@ -114,7 +136,7 @@ const nonTokensFromDomains = async (domainItems: Item[]): Promise<Item[]> => {
   const nonTokenDomains: Item[] = []
   for (const item of domainItems) {
     const tagMatches = await fetchTagsByAddressInRegistry(
-      item.key0,
+      item.metadata.key0,
       "tokens",
       conf.XDAI_GTCR_SUBGRAPH_URL
     )
