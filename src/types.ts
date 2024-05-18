@@ -2,19 +2,28 @@ import { BigNumber } from "ethers"
 
 export interface Prop {
   value: string
+  label: string
+  description: string
+  isIdentifier: boolean
+}
+
+export interface Metadata {
+  props: Prop[]
+  key0: string
+  key1?: string
+  key2?: string
+  key3?: string
+  key4?: string
+  keywords?: string
 }
 
 export interface Item {
-  props: Prop[]
   id: string
   latestRequestResolutionTime: string
   registryAddress?: string
   status?: string
   requests: ItemRequest[]
-  key0: string
-  key1: string
-  key2: string
-  key3: string
+  metadata: Metadata
 }
 
 export interface ItemRequest {
